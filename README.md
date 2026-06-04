@@ -22,6 +22,7 @@ The skills exercised throughout this advanced integration phase include:
 * **Why It Matters:** Modern enterprises rarely operate on purely isolated on-premises directory infrastructure. Transitioning the lab to a Hybrid Identity model simulates real-world enterprise constraints, enabling unified identity governance, cloud-based access controls, and preparation for cloud-managed device compliance.
 
 ![User Sync Verification](assets/documentation/entra-connect-sync-verification.png)
+![Forest Sync](<assets/documentation/azure ad connect.png>)
 
 ### Auditing via PingCastle
 * **What Was Built:** Integrated PingCastle to run automated, deep-dive configuration audits against the Active Directory database structure.
@@ -59,6 +60,19 @@ The skills exercised throughout this advanced integration phase include:
 * **Context:** The central Ubuntu-based Wazuh server manager experienced an abrupt local storage allocation failure, corrupting index states and rendering the web dashboard user interface entirely inaccessible.
 * **Root Cause Diagnostics:** System inspection revealed an unhandled disk constraint, stalling the background database management daemons and causing the web front-end to time out on API calls.
 * **Remediation Scripting:** Troubleshot the underlying system service layers, cleared stale local cache locks, purged corrupted indexing remnants, and validated database daemon health to successfully restore the web UI and live log pipeline without core telemetry loss.
+1. Safely cleared localized package caching and pruned stale operational temp files to liberate storage space on the partition.
+2. Deleted corrupted file locks left behind by the indexer crash:
+```bash 
+sudo rm -rf /var/ossec/var/run/*
+```
+3. Forced a hard cycle of the indexing cluster to validate database daemon health:
+```bash
+sudo systemctl restart wazuh-indexer
+sudo systemctl restart wazuh-manager
+sudo systemctl restart wazuh-dashboard
+```
+4. Result: Verified all processes successfully binded back to their active ports. The web interface recovered smoothly with zero core log telemetry data loss.
+
 ![Insufficient Storage](assets/documentation/ranouttaspace.png)
 ![Corrected Size Allocation](assets/documentation/size-allocation.png)
 
