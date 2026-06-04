@@ -59,6 +59,8 @@ The skills exercised throughout this advanced integration phase include:
 * **Context:** The central Ubuntu-based Wazuh server manager experienced an abrupt local storage allocation failure, corrupting index states and rendering the web dashboard user interface entirely inaccessible.
 * **Root Cause Diagnostics:** System inspection revealed an unhandled disk constraint, stalling the background database management daemons and causing the web front-end to time out on API calls.
 * **Remediation Scripting:** Troubleshot the underlying system service layers, cleared stale local cache locks, purged corrupted indexing remnants, and validated database daemon health to successfully restore the web UI and live log pipeline without core telemetry loss.
+![Insufficient Storage](assets/documentation/ranouttaspace.png)
+![Corrected Size Allocation](assets/documentation/size-allocation.png)
 
 ### Incident 2: SSL Handshake Failure on Domain Controller Agent Deployment
 * **Context:** Attempted to onboard the Windows Server Domain Controller into the active SIEM monitoring framework via a generated PowerShell automated agent installation script. 
