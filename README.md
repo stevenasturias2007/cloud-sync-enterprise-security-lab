@@ -19,7 +19,7 @@ The skills exercised throughout this advanced integration phase include:
 
 ### 1. Microsoft Entra Connect Integration
 * **What Was Built:** Deployed and configured Microsoft Entra Connect on the local Domain Controller to establish a directory synchronization pipeline to a Microsoft 365 Business Premium cloud tenant.
-* **Why It Matters:** Modern enterprises rarely operate on purely isolated on-premises directory infrastructure. Transitioning the lab to a Hybrid Identity model simulates real-world enterprise constraints, enabling unified identity governance, cloud-based access controls, and preparation for cloud-managed device compliance.
+* **Why It Matters:** Most enterprise environments today are not purely on-premises or purely cloud; they run both. A user might have an Active Directory account for their Windows workstation and use the same credentials to log into Microsoft 365, Salesforce, or AWS. Microsoft Entra Connect makes that possible by syncing on-prem accounts to the cloud. Implementing it here mirrors a real-world hybrid identity architecture that most enterprise IT and cloud security roles will expect you to understand.
 
 ![User Sync Verification](assets/documentation/entra-connect-sync-verification.png)
 ![Forest Sync](<assets/documentation/azure ad connect.png>)
