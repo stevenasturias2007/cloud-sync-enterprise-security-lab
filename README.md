@@ -45,7 +45,7 @@ Most enterprise environments today are not purely on-premises or purely cloud, t
 3. Accept the license terms and click **Continue**.
 
 #### Step C: Express Settings Configuration
-1. Select **Use express settings** — this configures Password Hash Synchronization automatically, which is the recommended starting point for a lab environment.
+1. Select **Custom setting** — this allows you to configure Password Hash Synchronization, which is the recommended starting point for a lab environment.
 2. When prompted, sign in with your **Entra ID Global Administrator** credentials.
 3. Next, sign in with your **on-premises AD credentials** (`MYHOMELAB\Administrator`).
 4. Entra Connect will discover the `myhomelab.local` forest automatically.
@@ -83,7 +83,7 @@ A threat detection and security auditing layer built on three tools: Wazuh as th
 
 | Component | Tool | Host | Purpose |
 | :--- | :--- | :--- | :--- |
-| **SIEM Manager** | Wazuh | Ubuntu Server `192.168.1.165` | Log ingestion, alerting, agent management |
+| **SIEM Manager** | Wazuh & Ubuntu VM| Ubuntu Server `192.168.1.165` | Log ingestion, alerting, agent management |
 | **SIEM Agent** | Wazuh Agent | `DomainControllerWIN` | Ships Windows Event Logs to SIEM manager |
 | **Domain Auditing** | PingCastle | `DomainControllerWIN` | Risk scoring and misconfiguration detection |
 | **Attack Path Mapping** | BloodHound + SharpHound | Ubuntu (BloodHound) / DC (SharpHound) | AD privilege escalation path visualization |
@@ -99,7 +99,28 @@ Think of **Wazuh** like a security camera system. The agent on the Domain Contro
 
 **BloodHound** is the attacker's perspective. It takes a snapshot of every relationship in Active Directory — who's in what group, who has admin rights over what objects, which accounts have a path to Domain Admin; and draws a map. If a low-privileged account can reach Domain Admin in three hops, BloodHound shows you exactly which three hops to take.
 
+---
 
+### 1. Ubuntu Server Provisioning & Docker Setup
+
+### What Was Built
+An Ubuntu Server 22.04 VM provisioned in VirtualBox as a dedicated security tooling host, with Docker installed as the container runtime for all subsequent security tool deployments (Wazuh and BloodHound).
+
+| Component | Details |
+| :--- | :--- |
+| **OS** | Ubuntu Server 22.04 LTS |
+| **Network** | Bridged Adapter — `192.168.1.165` (static) |
+| **Container Runtime** | Docker Engine |
+| **Purpose** | Host platform for Wazuh SIEM and BloodHound containers |
+
+---
+
+### Why This Matters
+Think of Docker like a lunchbox. Instead of cooking a full meal in your kitchen every time (installing a tool directly onto the OS with all its dependencies), you pack everything the tool needs into a self-contained box and just open it when you need it. Each container runs in isolation, meaning Wazuh and BloodHound don't interfere with each other or with the underlying Ubuntu system. This is exactly how security teams deploy tools in real environments — containerized, portable, and easy to tear down and rebuild if something breaks.
+
+The Ubuntu VM sitting on a Bridged Adapter also mirrors a real-world out-of-band management network, where the SIEM and security tooling live on a separate network segment from the infrastructure they monitor.
+
+---
 
 ### How I Did It
 
@@ -107,14 +128,20 @@ Think of **Wazuh** like a security camera system. The agent on the Domain Contro
 
 | Setting | Value |
 | :--- | :--- |
-| Name | `WazuhSIEM` |
+| Name | `Sec-Lab-01` |
 | OS | Ubuntu Server 22.04 LTS |
 | RAM | 4096 MB minimum |
 | CPU Cores | 2 |
 | Storage | 50 GB dynamically allocated VDI |
 | Network | Bridged Adapter |
 
-After installation, assign a static IP so the Wazuh agent always knows where to reach the manager:
+- Download the **Ubuntu Server 22.04 LTS ISO** from [ubuntu.com](https://ubuntu.com/download/server).
+- Attach the ISO in VirtualBox and complete the installation with default settings.
+- Set a username and strong password when prompted. No GUI is needed — Ubuntu Server is headless by default.
+
+#### Step B: Static IP Assignment
+Assign a static IP so Docker containers and the Wazuh agent on the Domain Controller always have a consistent address to connect to.
+
 ```bash
 sudo nano /etc/netplan/00-installer-config.yaml
 ```
@@ -133,14 +160,80 @@ network:
 sudo netplan apply
 ```
 
-#### Step B: Wazuh Manager Installation (Ubuntu)
+Verify the static IP took effect:
 ```bash
-curl -sO https://packages.wazuh.com/4.7/wazuh-install.sh
-sudo bash wazuh-install.sh -a
+ip a
 ```
-Once complete, the Wazuh dashboard is accessible at `https://192.168.1.165`. Log in with the credentials output by the installer.
 
-#### Step C: Wazuh Agent Deployment (Domain Controller)
+#### Step C: Docker Engine Installation
+```bash
+# Update package index
+sudo apt update
+
+# Install required dependencies
+sudo apt install ca-certificates curl gnupg -y
+
+# Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Add Docker repository
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Install Docker Engine
+sudo apt update
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+```
+
+#### Step D: Post-Install Configuration
+Add your user to the Docker group so you can run Docker commands without `sudo`:
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+#### Step E: Verification
+```bash
+# Confirm Docker is running
+sudo systemctl status docker
+```
+![Status Running](assets/documentation/running-confirmation.png)
+
+---
+
+### Confirm
+- Ubuntu VM is reachable at `192.168.1.165` from the host machine.
+- `docker run hello-world` completes successfully.
+- Docker service is set to start on boot (`sudo systemctl enable docker`).
+
+---
+
+### 2. Wazuh Manager Installation & Agent Deployment (Ubuntu & Windows Domain Controller)
+
+1. Create a directory for the Wazuh Docker configuration on Ubuntu VM:
+```bash
+mkdir wazuh-docker && cd wazuh-docker
+```
+2. Download the official Wazuh Docker Compose file:
+```bash
+curl -so docker-compose.yml https://raw.githubusercontent.com/wazuh/wazuh-docker/v4.7.0/single-node/docker-compose.yml
+```
+3. Deploy the Wazuh stack:
+```bash
+docker compose up -d
+```
+This starts three containers: the Wazuh Manager, the Wazuh Indexer, and the Wazuh Dashboard.
+
+4. Once the containers are running, access the Wazuh dashboard at `https://192.168.1.165` in a browser. Default credentials are `admin / SecretPassword` — change these immediately after first login.
+
+![Wazuh Login Dashboard](assets/documentation/wazuh-dashboard.png)
+
+#### Wazuh Agent Deployment on AD DC
 1. On the Domain Controller, download the **Wazuh Agent for Windows** from the Wazuh dashboard or [packages.wazuh.com](https://packages.wazuh.com).
 2. Run the installer and set the **Manager IP** to `192.168.1.165`.
 3. Start the agent service:
@@ -148,58 +241,63 @@ Once complete, the Wazuh dashboard is accessible at `https://192.168.1.165`. Log
 NET START WazuhSvc
 ```
 4. Verify the agent appears as **Active** in the Wazuh dashboard under **Agents**.
+![Agent Active](assets/documentation/1agentactive.png)
+The agent immediately begins shipping Windows Event Logs; authentication events, policy changes, and service starts to the SIEM manager.
 
-The agent immediately begins shipping Windows Event Logs — authentication events, policy changes, service starts, and more — to the SIEM manager.
+---
 
-#### Step D: PingCastle — Domain Security Audit
+### 2. PingCastleDomain Security Auditing
 PingCastle is a portable executable that runs directly on the Domain Controller with no installation required.
 
 1. Download **PingCastle** from [pingcastle.com](https://www.pingcastle.com/download/) and extract it to the Domain Controller.
 2. Run `PingCastle.exe` as Administrator.
-3. Select **1 — Healthcheck** and enter `myhomelab.local` when prompted.
+3. Select **Healthcheck** and enter `myhomelab.local` when prompted.
 4. PingCastle crawls the domain and generates an HTML report scoring the environment across four risk categories: **Stale Objects**, **Privileged Accounts**, **Trusts**, and **Anomalies**.
+5. View your Risk Model & Risk Assessment reports generated from PingCastle for you DC
+![Risk Assessment](assets/documentation/pingcastle-risk-assessment.png)
+![Risk Model](assets/documentation/pingcastle-riskmodel.png)
 
-The report highlights specific misconfigurations ranked by severity, giving a concrete remediation checklist. In a real environment this report is used to demonstrate security posture before a penetration test or compliance review.
+The reports highlight specific misconfigurations ranked by severity, giving a concrete remediation checklist. In a real environment this report is used to demonstrate security posture before a penetration test or compliance review.
 
-#### Step E: BloodHound — Attack Path Mapping
+---
 
-**On the Domain Controller — SharpHound data collection:**
+### 3. BloodHound Deployment via Docker
 
-SharpHound queries Active Directory and exports a ZIP file containing all the relationship data BloodHound needs to build its graph.
-
-1. Download **SharpHound** from the [BloodHound GitHub releases](https://github.com/BloodHoundAD/BloodHound/releases).
-2. Run it on the Domain Controller:
-```powershell
-.\SharpHound.exe -c All
-```
-3. Transfer the output `.zip` file to the Ubuntu VM.
-
-**On Ubuntu — BloodHound installation and data import:**
+1. Create a directory for BloodHound:
 ```bash
-sudo apt install bloodhound neo4j -y
-sudo neo4j start
-bloodhound &
+mkdir bloodhound-docker && cd bloodhound-docker
 ```
-1. On first launch, change the default Neo4j password at `http://localhost:7474`.
-2. Log into the BloodHound GUI and click **Upload Data**. Select the SharpHound ZIP file.
-3. BloodHound ingests the data and builds an interactive graph of the entire AD environment.
+2. Download the official BloodHound Community Edition Docker Compose file:
+```bash
+curl -L https://ghst.ly/getbhce -o docker-compose.yml
+```
+![Install](bloodhound-install.png)
+
+3. Deploy BloodHound:
+```bash
+docker compose up -d
+```
+4. On first startup, Docker prints a randomly generated password to the container logs. Retrieve it with:
+```bash
+docker compose logs | grep "Initial Password Set To"
+```
+5. Before accessing BloodHound UI on the web, confirm that is is running with:
+```bash
+cd ~/bloodhound && sudo docker compose ps
+```
+![BloodHound Healthy and Running](assets/documentation/status-up.png)
+
+6. Access the BloodHound UI at `http://192.168.1.165:8080` and log in with `admin` and the password from the logs. You will be prompted to set a new password on first login.
 
 **Useful queries to run after import:**
 - `Find Shortest Paths to Domain Admins` — shows any route a low-privileged user could take to reach DA
 - `Find All Domain Admins` — lists every account with Domain Admin rights
 - `Find Principals with DCSync Rights` — identifies accounts that could dump the entire credential database
-
+![Cypher Bloodhound](assets/documentation/cypher.png)
+![Data Quality](assets/documentation/data-quality.png)
+![Path Map](<assets/documentation/path torwards destination.png>)
 ---
 
-### Verification
-- Wazuh dashboard shows `DomainControllerWIN` agent as **Active** with events populating in real time.
-![Agent Active](assets/documentation/1agentactive.png)
-- PingCastle HTML report generated with a domain risk score and itemized findings.
-![PingCastle Risk Model](assets/documentation/pingcastle-riskmodel.png)
-![Risk Assessment](assets/documentation/pingcastle-risk-assessment.png)
-- BloodHound graph loaded and attack path queries return results.
-![Paths](<assets/documentation/path torwards destination.png>)
-![Query](assets/documentation/cypher.png)
 
 ## Cloud Endpoint Protection via Microsoft Defender for Endpoint
 
@@ -304,18 +402,33 @@ sudo systemctl restart wazuh-dashboard
     4. Result: Connection successfully verified; the Domain Controller is actively shipping telemetry logs into the SIEM dashboard environment.
     ![Agent Active](assets/documentation/1agentactive.png)
 
+    
+### Incident 3: SharpHound Blocked by Windows Defender
+
+* **Context:** Running `SharpHound.exe` on the Domain Controller was immediately blocked by Windows Security. The executable was flagged as a potentially unwanted application and prevented from executing, producing no output.
+
+* **Root Cause:** SharpHound is a legitimate Active Directory enumeration tool used by security professionals, but because it is also widely used in real attacks to map privilege escalation paths, Windows Defender flags it as a hack tool by default. This is expected behavior and not a sign that something is wrong with the file.
+
+* **Fix:** Added a Windows Defender exclusion for the folder containing `SharpHound.exe` so real-time protection would not interfere with execution.
+
+1. Open **Windows Security** on the Domain Controller.
+2. Navigate to **Virus & Threat Protection > Manage Settings**.
+3. Scroll down to **Exclusions** and click **Add or remove exclusions**.
+4. Click **Add an exclusion > Folder** and select the directory containing `SharpHound.exe`.
+5. Re-ran `SharpHound.exe` after the exclusion was applied, completed successfully and generated the output ZIP file.
+![Exclusion](exclusions.png)
+> **Note:** This exclusion should only exist for the duration of the data collection exercise. In a real environment, running SharpHound without authorization would itself be a security incident. The Wazuh agent on the Domain Controller would log this activity, making it a useful detection exercise to revisit in a future phase.
+
 ---
 
 ## Conclusion
 
 This lab goes from a blank hypervisor to a monitored, audited, and actively protected enterprise environment across five phases. The progression mirrors how real IT and security teams layer defenses: build the infrastructure, automate identity management, lock it down with policy, then add visibility and detection on top.
 
-The most instructive moments weren't the steps that worked the first time. AppLocker silently breaking the Start Menu, the DHCP gateway missing because Scope Option 003 was never configured, ILT failing because of a missing Read permission on a GPO — those are the problems that show up in real environments too. Documenting them is the point.
-
-| Phase | Domain | Key Technologies |
-| :--- | :--- | :--- |
-| 0–1 | Infrastructure | VirtualBox, Windows Server 2022, RRAS, DHCP, DNS |
-| 2 | Identity Automation | PowerShell, AD DS, OU taxonomy, RBAC |
-| 3 | Policy Enforcement | GPO, AppLocker, Item-Level Targeting |
-| 4 | Threat Detection & Auditing | Wazuh, PingCastle, BloodHound, SharpHound |
-| 5 | Endpoint Protection | Microsoft Defender for Endpoint, GPO onboarding |
+| Domain | Key Technologies |
+| :--- | :--- |
+| Infrastructure | VirtualBox, Windows Server 2022, RRAS, DHCP, DNS |
+| Identity Automation | PowerShell, AD DS, OU taxonomy, RBAC |
+| Policy Enforcement | GPO, AppLocker, Item-Level Targeting |
+| Threat Detection & Auditing | Wazuh, PingCastle, BloodHound, SharpHound |
+| Endpoint Protection | Microsoft Defender for Endpoint, GPO onboarding |
