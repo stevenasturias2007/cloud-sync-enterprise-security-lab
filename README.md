@@ -28,7 +28,7 @@ On-premises Active Directory accounts synced to Microsoft Entra ID (formerly Azu
 ---
 
 ### Why This Matters
-Most enterprise environments today are not purely on-premises or purely cloud, they run both at the same time. Entra Connect is like a copy machine that runs on a schedule. Every time a user account gets created or changed in your on-premises Active Directory, Entra Connect copies that change up to the cloud so both directories stay in sync. This means a user can log into their domain-joined Windows workstation with the same credentials they use to access Microsoft 365, Azure, or any other cloud service tied to the tenant. That single consistent identity across both environments is called hybrid identity, and it's the standard architecture at most mid-to-large enterprises today.
+Most enterprise environments today are not purely on-premises or purely cloud, they run both at the same time. Every time a user account gets created or changed in your on-premises Active Directory, Entra Connect copies that change up to the cloud so both directories stay in sync. This means a user can log into their domain-joined Windows workstation with the same credentials they use to access Microsoft 365, Azure, or any other cloud service tied to the tenant. That single consistent identity across both environments is called hybrid identity, and it's the standard architecture at most mid-to-large enterprises today.
 
 ---
 
@@ -45,7 +45,7 @@ Most enterprise environments today are not purely on-premises or purely cloud, t
 3. Accept the license terms and click **Continue**.
 
 #### Step C: Express Settings Configuration
-1. Select **Custom setting** — this allows you to configure Password Hash Synchronization, which is the recommended starting point for a lab environment.
+1. Select **Custom Settings** — this allows you to configure Password Hash Synchronization, which is the recommended starting point for a lab environment.
 2. When prompted, sign in with your **Entra ID Global Administrator** credentials.
 3. Next, sign in with your **on-premises AD credentials** (`MYHOMELAB\Administrator`).
 4. Entra Connect will discover the `myhomelab.local` forest automatically.
@@ -79,7 +79,7 @@ Synced accounts appear in the Entra ID Users list with **Source: Windows Server 
 ## SIEM Deployment, AD Security Auditing & Attack Path Mapping
 
 ### What Was Built
-A threat detection and security auditing layer built on three tools: Wazuh as the SIEM collecting live logs from the Domain Controller, PingCastle for AD domain risk scoring, and BloodHound for visualizing Active Directory attack paths and privilege escalation routes.
+A threat detection and security auditing layer built on three tools: Wazuh as the SIEM collecting live logs from the Domain Controller, PingCastle for AD domain risk scoring/security auditing, and BloodHound for visualizing Active Directory attack paths and privilege escalation routes.
 
 | Component | Tool | Host | Purpose |
 | :--- | :--- | :--- | :--- |
@@ -91,13 +91,11 @@ A threat detection and security auditing layer built on three tools: Wazuh as th
 ---
 
 ### Why This Matters
-Building a secured AD environment is one thing. Knowing whether it's actually secure and seeing attacks as they happen is a completely different problem. This phase adds eyes to the lab.
+**Wazuh** acts like a security camera system. The agent on the Domain Controller is the camera, and the Ubuntu SIEM manager is the recording station in a back room. Every interesting event on the DC, a failed login, a new user being created, a service starting unexpectedly, gets shipped to Wazuh and stored for analysis.
 
-Think of **Wazuh** like a security camera system. The agent on the Domain Controller is the camera, and the Ubuntu SIEM manager is the recording station in a back room. Every interesting event on the DC, a failed login, a new user being created, a service starting unexpectedly, gets shipped to Wazuh and stored for analysis.
+**PingCastle** acts like a building inspector walking through your domain and handing you a report card. It doesn't break anything, it tells you what's misconfigured, what's stale, and what an attacker could exploit. Every finding comes with a severity score.
 
-**PingCastle** is like a building inspector walking through your domain and handing you a report card. It doesn't break anything, it tells you what's misconfigured, what's stale, and what an attacker could exploit. Every finding comes with a severity score.
-
-**BloodHound** is the attacker's perspective. It takes a snapshot of every relationship in Active Directory — who's in what group, who has admin rights over what objects, which accounts have a path to Domain Admin; and draws a map. If a low-privileged account can reach Domain Admin in three hops, BloodHound shows you exactly which three hops to take.
+**BloodHound** is the attacker's perspective. It gives an overview of every relationship in Active Directory, such as who's in what group, who has admin rights over what objects, which accounts have a path to Domain Admin; and draws a map. If a low-privileged account can reach Domain Admin in three hops, BloodHound shows you exactly which three hops to take.
 
 ---
 
@@ -116,7 +114,7 @@ An Ubuntu Server 22.04 VM provisioned in VirtualBox as a dedicated security tool
 ---
 
 ### Why This Matters
-Think of Docker like a lunchbox. Instead of cooking a full meal in your kitchen every time (installing a tool directly onto the OS with all its dependencies), you pack everything the tool needs into a self-contained box and just open it when you need it. Each container runs in isolation, meaning Wazuh and BloodHound don't interfere with each other or with the underlying Ubuntu system. This is exactly how security teams deploy tools in real environments — containerized, portable, and easy to tear down and rebuild if something breaks.
+Docker acts like a lunchbox, instead of cooking a full meal in your kitchen every time (installing a tool directly onto the OS with all its dependencies), you pack everything the tool needs into a self-contained box and just open it when you need it. Each container runs in isolation, meaning Wazuh and BloodHound don't interfere with each other or with the underlying Ubuntu system. This is similar how security teams deploy tools in real environments; containerized, portable, and easy to tear down and rebuild if something breaks.
 
 The Ubuntu VM sitting on a Bridged Adapter also mirrors a real-world out-of-band management network, where the SIEM and security tooling live on a separate network segment from the infrastructure they monitor.
 
@@ -423,7 +421,9 @@ sudo systemctl restart wazuh-dashboard
 
 ## Conclusion
 
-This lab goes from a blank hypervisor to a monitored, audited, and actively protected enterprise environment across five phases. The progression mirrors how real IT and security teams layer defenses: build the infrastructure, automate identity management, lock it down with policy, then add visibility and detection on top.
+This lab goes from a blank hypervisor to a monitored, audited, and actively protected enterprise environment across five phases. The design was proceeded with the intention to mirror how real IT and security teams layer defenses: build the infrastructure, automate identity management, lock it down with policy, then add visibility and detection on top. 
+
+
 
 | Domain | Key Technologies |
 | :--- | :--- |
