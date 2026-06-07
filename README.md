@@ -414,7 +414,7 @@ sudo systemctl restart wazuh-dashboard
 3. Scroll down to **Exclusions** and click **Add or remove exclusions**.
 4. Click **Add an exclusion > Folder** and select the directory containing `SharpHound.exe`.
 5. Re-ran `SharpHound.exe` after the exclusion was applied, completed successfully and generated the output ZIP file.
-![Exclusion](exclusions.png)
+![Exclusion](assets/documentation/exclusions.png)
 > **Note:** This exclusion should only exist for the duration of the data collection exercise. In a real environment, running SharpHound without authorization would itself be a security incident. The Wazuh agent on the Domain Controller would log this activity, making it a useful detection exercise to revisit in a future phase.
 
 ---
